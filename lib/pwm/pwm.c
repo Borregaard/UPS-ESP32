@@ -1,156 +1,124 @@
+#include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <math.h>
+#include <pin_config.h>
+#include "driver/ledc.h"
+#include "driver/timer.h"
+#include "esp_attr.h"
+#include "esp_err.h"
+#include "esp_intr_alloc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "driver/ledc.h"
-#include "esp_err.h"
-#include "soc/ledc_reg.h"
-#include <pin_config.h>
-#include "freertos/queue.h"
-#include "driver/gptimer.h"
-#include "esp_log.h"
+#include "rom/ets_sys.h"
+#include "rom/gpio.h"
+#include "esp_intr_alloc.h"
+#include "sdkconfig.h"
+#include "hal/timer_types.h"
 
 #define LEDC_TIMER LEDC_TIMER_0
 #define LEDC_MODE LEDC_LOW_SPEED_MODE
 #define LEDC_CHANNEL LEDC_CHANNEL_0
 #define LEDC_DUTY_RES LEDC_TIMER_8_BIT
 #define LEDC_DUTY (128)
-#define SIN_WAVE_RES (128)
-#define LEDC_FREQUENCY (50)
+#define SIN_WAVE_RES (20)
+#define LEDC_FREQUENCY (SIN_WAVE_RES*50)
+#define TIMER_DELAY (1000000/LEDC_FREQUENCY)
 
-// static int SINE_LOOKUP_TABLE[SIN_WAVE_RES];
-
-// static void sinWaveTable()
-// {
-//     int i;
-//     float wave = (2 * M_PI) / SIN_WAVE_RES;
-//     for (i = 0; i < SIN_WAVE_RES; i++)
-//     {
-//         SINE_LOOKUP_TABLE[i] = sin(wave * i) * LEDC_DUTY + LEDC_DUTY;
-//     }
-// }
-
-// static void ledc_init(void)
-// {
-//     ledc_timer_config_t ledc_timer = {
-//         .speed_mode = LEDC_MODE,
-//         .duty_resolution = LEDC_DUTY_RES,
-//         .timer_num = LEDC_TIMER,
-//         .freq_hz = LEDC_FREQUENCY,
-//         .clk_cfg = LEDC_AUTO_CLK};
-//     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
-//     ledc_channel_config_t ledc_channel = {
-
-//         .gpio_num = PWM_PIN,
-//         .speed_mode = LEDC_MODE,
-//         .channel = LEDC_CHANNEL,
-//         .intr_type = LEDC_INTR_DISABLE,
-//         .timer_sel = LEDC_TIMER,
-//         .duty = LEDC_DUTY,
-//         .hpoint = 0};
-//     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
-// }
-
+static int SINE_LOOKUP_TABLE[SIN_WAVE_RES];
 // static int sine_table_index = 0;
 
-// void IRAM_ATTR ledc_timer0_overflow_isr(void *arg)
-// {
-//     // clear the interrupt
-//     REG_SET_BIT(LEDC_INT_CLR_REG, LEDC_HSTIMER0_OVF_INT_CLR);
-
-//     // update duty, shift the duty 4 bits to the left due to ESP32 register format
-//     REG_WRITE(LEDC_HSCH0_DUTY_REG, SINE_LOOKUP_TABLE[sine_table_index] << 4);
-//     REG_SET_BIT(LEDC_HSCH0_CONF1_REG, LEDC_DUTY_START_HSCH0);
-
-//     // increment the sine table index
-//     if (++sine_table_index >= SIN_WAVE_RES)
-//         sine_table_index = 0;
-// }
-
-static const char *TAG = "example";
-
-typedef struct
+static void sin_wave_table()
 {
-    uint64_t event_count;
-} example_queue_element_t;
-
-static bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data)
-{
-    BaseType_t high_task_awoken = pdFALSE;
-    QueueHandle_t queue = (QueueHandle_t)user_data;
-    // stop timer immediately
-    gptimer_stop(timer);
-    // Retrieve count value and send to queue
-    example_queue_element_t ele = {
-        .event_count = edata->count_value};
-    xQueueSendFromISR(queue, &ele, &high_task_awoken);
-    // return whether we need to yield at the end of ISR
-    return (high_task_awoken == pdTRUE);
+    int i;
+    float wave = (2 * M_PI) / SIN_WAVE_RES;
+    for (i = 0; i < SIN_WAVE_RES; i++)
+    {
+        SINE_LOOKUP_TABLE[i] = sin(wave * i) * LEDC_DUTY + LEDC_DUTY;
+    }
 }
+
+static void ledc_init(void)
+{
+    ledc_timer_config_t ledc_timer = {
+        .speed_mode = LEDC_MODE,
+        .duty_resolution = LEDC_DUTY_RES,
+        .timer_num = LEDC_TIMER,
+        .freq_hz = LEDC_FREQUENCY,
+        .clk_cfg = LEDC_AUTO_CLK};
+    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
+    ledc_channel_config_t ledc_channel = {
+
+        .gpio_num = PWM_PIN,
+        .speed_mode = LEDC_MODE,
+        .channel = LEDC_CHANNEL,
+        .intr_type = LEDC_INTR_DISABLE,
+        .timer_sel = LEDC_TIMER,
+        .duty = LEDC_DUTY,
+        .hpoint = 0};
+    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
+}
+
+static intr_handle_t s_timer_handle;
+
+static void IRAM_ATTR timer_tg0_isr(void* arg)
+{
+	static int io_state = 0;
+
+	// //Reset irq and set for next time
+    // TIMER_0.int_clr_timers.t0 = 1;
+    // TIMERG0.hw_timer[0].config.alarm_en = 1;
+
+
+    //----- HERE EVERY #uS -----
+
+	//Toggle a pin so we can verify the timer is working using an oscilloscope
+	io_state ^= 1;									//Toggle the pins state
+	gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT);
+	gpio_set_level(LED_PIN, io_state);
+
+
+
+}
+
+void timer_tg0_initialise (int timer_period_us)
+{
+    timer_config_t config = {
+            .alarm_en = true,				//Alarm Enable
+            .counter_en = false,			//If the counter is enabled it will start incrementing / decrementing immediately after calling timer_init()
+            .intr_type = TIMER_INTR_LEVEL,	//Is interrupt is triggered on timer’s alarm (timer_intr_mode_t)
+            .counter_dir = TIMER_COUNT_UP,	//Does counter increment or decrement (timer_count_dir_t)
+            .auto_reload = true,			//If counter should auto_reload a specific initial value on the timer’s alarm, or continue incrementing or decrementing.
+            .divider = 80   				//Divisor of the incoming 80 MHz (12.5nS). Default the clock source is APB_CLK (typically 80 MHz). (Range 2 to 65536). 80 = 1uS per timer tick
+    };
+
+    timer_init(TIMER_GROUP_0, TIMER_0, &config);
+    timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0);
+    timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, timer_period_us);  //(group_num, timer_num, alarm_value)  alarm_value (uint64) is how many timer ticks before the irq will be fired. (divider x alarm_value)=Time period, so 1uS x 100 = 100uS
+    timer_enable_intr(TIMER_GROUP_0, TIMER_0);
+    timer_isr_register(TIMER_GROUP_0, TIMER_0, &timer_tg0_isr, NULL, 0, &s_timer_handle);
+
+    timer_start(TIMER_GROUP_0, TIMER_0);
+}
+
+
+
+
 
 void PWM_controller(void)
 {
     // Initilizes the PWM and the timer
-    // ledc_init();
-    // // creates the sine wavr look up table
-    // sinWaveTable();
-
-    // // register overflow interrupt handler for timer0
-    // ledc_isr_register(ledc_timer0_overflow_isr, NULL, ESP_INTR_FLAG_IRAM, NULL);
-    // // enable the overflow interrupt
-    // REG_SET_BIT(LEDC_INT_ENA_REG, LEDC_HSTIMER0_OVF_INT_ENA);
-
-    example_queue_element_t ele;
-    QueueHandle_t queue = xQueueCreate(10, sizeof(example_queue_element_t));
-    if (!queue)
-    {
-        ESP_LOGE(TAG, "Creating queue failed");
-        return;
-    }
-
-    ESP_LOGI(TAG, "Create timer handle");
-    gptimer_handle_t gptimer = NULL;
-    gptimer_config_t timer_config = {
-        .clk_src = GPTIMER_CLK_SRC_DEFAULT,
-        .direction = GPTIMER_COUNT_UP,
-        .resolution_hz = 1000000, // 1MHz, 1 tick=1us
-    };
-    ESP_ERROR_CHECK(gptimer_new_timer(&timer_config, &gptimer));
-
-    gptimer_event_callbacks_t cbs = {
-        .on_alarm = example_timer_on_alarm_cb_v1,
-    };
-    ESP_ERROR_CHECK(gptimer_register_event_callbacks(gptimer, &cbs, queue));
-
-    ESP_LOGI(TAG, "Enable timer");
-    ESP_ERROR_CHECK(gptimer_enable(gptimer));
-
-    ESP_LOGI(TAG, "Start timer, stop it at alarm event");
-    gptimer_alarm_config_t alarm_config1 = {
-        .alarm_count = 1000000, // period = 1s
-    };
-    ESP_ERROR_CHECK(gptimer_set_alarm_action(gptimer, &alarm_config1));
-    ESP_ERROR_CHECK(gptimer_start(gptimer));
-    if (xQueueReceive(queue, &ele, pdMS_TO_TICKS(2000)))
-    {
-        ESP_LOGI(TAG, "Timer stopped, count=%llu", ele.event_count);
-    }
-    else
-    {
-        ESP_LOGW(TAG, "Missed one count event");
-    }
-
-    ESP_LOGI(TAG, "Set count value");
-    ESP_ERROR_CHECK(gptimer_set_raw_count(gptimer, 100));
-    ESP_LOGI(TAG, "Get count value");
-    uint64_t count;
-    ESP_ERROR_CHECK(gptimer_get_raw_count(gptimer, &count));
-    ESP_LOGI(TAG, "Timer count value=%llu", count);
-
-    // before updating the alarm callback, we should make sure the timer is not in the enable state
-    ESP_LOGI(TAG, "Disable timer");
-    ESP_ERROR_CHECK(gptimer_disable(gptimer));
+    ledc_init();
+    // creates the sine wave look up table
+    sin_wave_table();
     
+    // ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, 128));
+    // ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
 
-    vQueueDelete(queue);
+    timer_tg0_initialise(100);
+
+    while(1) {
+
+    }
 }
