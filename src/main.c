@@ -21,13 +21,13 @@ void app_main(void)
 }
 
 void mainLoop(void *arg) {
-    // while (1) {
-    //     gpio_set_level(LED_PIN, 0);
-    //     vTaskDelay(100);
+    while (1) {
+        gpio_set_level(LED_PIN, 0);
+        vTaskDelay(100);
 
-    //     gpio_set_level(LED_PIN, 1);
-    //     vTaskDelay(100);
-    // }
+        gpio_set_level(LED_PIN, 1);
+        vTaskDelay(100);
+    }
 }
 
 void PWMLoop(void *arg) {
