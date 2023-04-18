@@ -17,7 +17,7 @@
 #define PWM_CHANNEL LEDC_CHANNEL_0
 #define PWM_DUTY_RES LEDC_TIMER_8_BIT
 #define PWM_DUTY (128)
-#define SCALAR (2)
+#define SCALAR (8)
 #define SIN_WAVE_RES (20*SCALAR)
 #define PWM_FREQUENCY (SIN_WAVE_RES * 50)
 
@@ -76,7 +76,7 @@ void TIMER_INIT(void)
         .name = "My Timer"};
     esp_timer_handle_t timer_handler;
     ESP_ERROR_CHECK(esp_timer_create(&my_timer_args, &timer_handler));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, PWM_FREQUENCY/(SCALAR*2)));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, PWM_FREQUENCY/(SCALAR*SCALAR)));
 }
 
 void PWM_controller(void)
