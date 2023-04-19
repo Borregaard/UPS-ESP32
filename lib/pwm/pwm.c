@@ -55,21 +55,16 @@ static void ledc_init(void)
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 }
 
-void timer_callback(void *param)
+static void timer_callback(void *param)
 {
     int DUTY = SINE_LOOKUP_TABLE[sine_table_index];
     ESP_ERROR_CHECK(ledc_set_duty(PWM_MODE, PWM_CHANNEL, DUTY));
     ESP_ERROR_CHECK(ledc_update_duty(PWM_MODE, PWM_CHANNEL));
 
     if (++sine_table_index >= SIN_WAVE_RES) {sine_table_index = 0;}
-
-    static bool ON;
-    ON = !ON;
-
-    gpio_set_level(TEST_PIN, ON);
 }
 
-void TIMER_INIT(void)
+static void TIMER_INIT(void)
 {
     const esp_timer_create_args_t my_timer_args = {
         .callback = &timer_callback,
@@ -85,8 +80,5 @@ void PWM_controller(void)
     ledc_init();
 
     TIMER_INIT();
-
-    while (1)
-    {
-    }
 }
+
