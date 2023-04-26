@@ -16,38 +16,33 @@
 #include "esp_log.h"
 #include <math.h>
 
-#define TARGET_FREQ (5000)
+#define TARGET_FREQ (2500)
 #define STEP_RES (80)
-#define FREQ (STEP_RES * TARGET_FREQ)
-#define PERIODE (1 / FREQ * pow(10, 6))
 #define AMPLITUDE (255)
-
-#define SAMPLE_RATE (44100*9)
+#define SAMPLE_RATE (TARGET_FREQ * STEP_RES)
 #define DMA_BUF_LEN (32)
 #define DMA_NUM_BUF (2)
 #define I2S_NUM (0)
-#define WAVE_FREQ_HZ (FREQ*9)
 
 static int tri_wave_arr[STEP_RES];
 static int tri_wave_idx = 0;
 
 static void triangle_wave_signal_generator()
 {
-    float inc = AMPLITUDE / STEP_RES;  
-    for (int i = 0; i < STEP_RES+2; i++)
+    float inc = AMPLITUDE / STEP_RES;
+    for (int i = 0; i < STEP_RES + 2; i++)
     {
         if (i < STEP_RES / 2)
         {
-            tri_wave_arr[i] = (int)2*(inc * i);
+            tri_wave_arr[i] = (int)2 * (inc * i);
         }
         else
         {
-            tri_wave_arr[i] = (int)2*(AMPLITUDE - inc * (i  + 1 - (STEP_RES / 2)));
+            tri_wave_arr[i] = (int)2 * (AMPLITUDE - inc * (i + 1 - (STEP_RES / 2)));
         }
     }
 }
 
-// Output buffer (2ch interleaved)
 static uint16_t out_buf[DMA_BUF_LEN * 2];
 
 // Fill the output buffer and write to I2S DMA

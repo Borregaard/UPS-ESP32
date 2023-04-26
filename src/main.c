@@ -14,4 +14,8 @@ void app_main(void)
     PWM_controller();
 
     dac_controller();
+
+    while(1){
+
+    }
 }
