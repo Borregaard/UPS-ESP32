@@ -17,7 +17,7 @@
 #define PWM_CHANNEL0 LEDC_CHANNEL_0
 #define PWM_CHANNEL1 LEDC_CHANNEL_1
 #define PWM_DUTY_RES LEDC_TIMER_8_BIT
-#define PWM_DUTY (128)
+#define PWM_DUTY (255)
 #define SCALAR (8)
 #define SIN_WAVE_RES (20 * SCALAR)
 #define PWM_FREQUENCY (SIN_WAVE_RES * 50)
@@ -32,7 +32,7 @@ void sin_wave_table()
     double wave = (2 * M_PI) / SIN_WAVE_RES;
     for (i = 0; i < SIN_WAVE_RES; i++)
     {
-        SINE_LOOKUP_TABLE[i] = sin(wave * i) * PWM_DUTY * 2;
+        SINE_LOOKUP_TABLE[i] = sin(wave * i) * PWM_DUTY;
     }
 }
 
@@ -102,11 +102,6 @@ static void TIMER_INIT(void)
 void PWM_controller(void)
 {
     sin_wave_table();
-
-    SINE_LOOKUP_TABLE[0] = 0;
-    SINE_LOOKUP_TABLE[1] = 0;
-    SINE_LOOKUP_TABLE[98] = 0;
-    SINE_LOOKUP_TABLE[99] = 0;
 
     ledc_init();
 
