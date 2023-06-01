@@ -45,8 +45,8 @@ static void ledc_init(void)
         .freq_hz = PWM_FREQUENCY,
         .clk_cfg = LEDC_AUTO_CLK};
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
+    
     ledc_channel_config_t ledc_channel0 = {
-
         .gpio_num = PWM_PIN0,
         .speed_mode = PWM_MODE,
         .channel = PWM_CHANNEL0,
@@ -55,8 +55,8 @@ static void ledc_init(void)
         .duty = PWM_DUTY,
         .hpoint = 0};
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel0));
+    
     ledc_channel_config_t ledc_channel1 = {
-
         .gpio_num = PWM_PIN1,
         .speed_mode = PWM_MODE,
         .channel = PWM_CHANNEL1,
